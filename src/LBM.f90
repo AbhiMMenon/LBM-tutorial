@@ -18,13 +18,13 @@ program LBMSolver
     ! a reflective BC.
     
 
-    integer, parameter  ::  Nx = 400, Ny= 100, NL = 9, Nt= 10000
-    real(dp), parameter ::  rho_0 = 100_dp, tau = 0.62_dp, PI=4.D0*DATAN(1.D0)
+    integer, parameter  ::  Nx = 400, Ny= 100, NL = 9, Nt= 2000
+    real(dp), parameter ::  rho_0 = 1.100_dp, tau = 0.62_dp, PI=4.D0*DATAN(1.D0)
     
     integer             ::  idxs(9), cxs(9), cys(9), refl(9)
     integer             ::  ix,jx,kx,tx !iterators
-    real(dp)            ::  weights(9), F(Nx,Ny,NL), x(Nx,Ny), y(Nx,Ny)
-    real(dp)            ::  ux(Nx,Ny), uy(Nx,Ny), rho(Nx,Ny), bound
+    real(dp)            ::  weights(9), F(Nx,Ny,NL),F_eq(Nx,Ny,NL), x(Nx,Ny), y(Nx,Ny)
+    real(dp)            ::  ux(Nx,Ny), uy(Nx,Ny), rho(Nx,Ny), vDotU(Nx,Ny), bound(Nx,Ny,Nl)
 
     logical             ::  mask(Nx,Ny)
 
@@ -45,64 +45,87 @@ program LBMSolver
     weights = [16., 4., 4., 4., 4., 1., 1.,1.,1.]/36._dp
 
     ! Initial conditions
-    call random_number(F)
-    F(:,:,:) = F+1.0_dp
+    F = 1.0_dp
+    call random_number(F_eq)
+    F = F + 0.01*F_eq
 
     x = spread([(ix, ix=0,Nx-1)], 2, Ny) 
-    y = spread([(ix, ix=0,Ny-1)], 1, Nx) 
+    y = spread([(jx, jx=0,Ny-1)], 1, Nx) 
 
     ! Add an initial number distribution along nodal points 2, i.e., having lattice velocity
     ! (+1,0)
-    F(:,:, 2) = F(:,:,2) + 2.*(1. + 0.05*cos(2*PI*x/Nx))
+    F(:,:, 2) = F(:,:,2) + 2*(1. + 0.05*cos(2*PI*x/Nx*4))
     mask = ((x-Nx/4.)**2 + (y-Ny/2.)**2).lt.(Ny/4.)**2 !< logical mask for where the cylinder is 
 
-    ! Normalize velocity
-    do ix = 1,NL
-        F(:,:,ix) = F(:,:,ix)* rho_0/rho
+    ! Normalize with density
+    rho = sum(F(:,:,:), dim=3)
+    do kx = 1,NL
+        F(:,:,kx) = F(:,:,kx)*rho_0/rho
     end do
     
-    ! Initialize the flow variables, these are a sum and weighted sum of F
-    rho = sum(F,dim=3)
-    ux(:,:) = 0.
-    uy(:,:) = 0.
+    call calcFlow(F,rho, ux,uy)
 
     where(mask)
         rho = IEEE_Value(rho, IEEE_QUIET_NAN)
+        ux  = IEEE_Value(ux, IEEE_QUIET_NAN)
+        uy  = IEEE_Value(uy, IEEE_QUIET_NAN)
     end where
+    
+    call mat_write(rho, x,y,'rho',0)
+    call mat_write(ux, x,y,'ux',0)
+    call mat_write(uy, x,y,'uy',0)
+    
 
     do tx = 1,Nt
         print '("Iteration no.",i5)',tx
 
         ! -- step 1: drift/adection in velocity phase-space
-        do jx = 1,9
-            F(:,:,jx) = cshift(F(:,:,jx), cxs(jx), dim=2)
-            F(:,:,jx) = cshift(F(:,:,jx), cys(jx), dim=1) 
+        do kx = 1,9
+            F(:,:,kx) = cshift(F(:,:,kx), shift=-cxs(kx), dim=1)
+            F(:,:,kx) = cshift(F(:,:,kx), shift=-cys(kx), dim=2) 
+        end do
+
+        call calcFlow(F,rho, ux,uy)
+
+
+        ! -- compute equilibrium number densities
+        F_eq = 0._dp
+        do kx = 1,9
+            vDotU = ux*cxs(kx) + uy*cys(kx)
+            F_eq(:,:,kx) = rho*weights(kx)*(1. + 3.*vDotU + 4.5*vDotU**2- 1.5*(ux**2 + uy**2))
         end do
 
 
-        end where 
-
-        ! Reflective BC, use -funroll-loops
-        ! For some reason, using 'where' and the mask to vectorise this step resulted in
-        ! significant slowdown
-
-        do ix = 1,Nx
-            do jx = 1,Ny
-                do kx = 1,NL
-                    if (mask(ix,jx).eqv..true.) then
-                        bound = F(ix, jx, kx)
-                        F(ix, jx, kx) = F(ix, jx, refl(kx))
-                        F(ix, jx, refl(kx)) = bound
-                    end if
-                end do
-            end do 
+        ! -- Store reflective BC
+        do kx = 1,Nl
+            where(mask)
+                bound(:,:,kx) = F(:, :,refl(kx))
+            end where
         end do
-
-
+        
+        ! -- Collision step, relax to equilibrium
+        F = F+ (F_eq -F)/tau
+        
+        ! -- enforce reflective BC
+        do kx = 1,Nl
+            where(mask)
+                F(:, :,kx) = bound(:,:,kx)
+            end where
+        end do
 
     end do
-
-    call mat_write(rho, x,y,'rho',5)
+    
+    ! -- Print end fields
+    where(mask)
+        rho = IEEE_Value(rho, IEEE_QUIET_NAN)
+        ux  = IEEE_Value(ux, IEEE_QUIET_NAN)
+        uy  = IEEE_Value(uy, IEEE_QUIET_NAN)
+    end where
+    
+    call mat_write(rho, x,y,'rho',1)
+    call mat_write(ux, x,y,'ux',1)
+    call mat_write(uy, x,y,'uy',1)
+    
 
 
     contains 
@@ -138,6 +161,23 @@ program LBMSolver
             close(io)
         end subroutine mat_write
 
+
+        subroutine calcFlow(F, rho, ux, uy)
+            implicit none
+            real(dp), intent(in)          :: F(:,:,:)
+            real(dp), intent(out)         :: ux(:,:), uy(:,:), rho(:,:)
+        
+            ! -- Calculate flow variables
+            rho = sum(F(:,:,:), dim=3)
+            ux = 0.
+            uy = 0.
+            do kx = 1,Nl
+                ux = ux + F(:,:,kx)*cxs(kx)
+                uy = uy + F(:,:,kx)*cys(kx)
+            end do
+            ux = ux/rho
+            uy = uy/rho
+        end subroutine calcFlow
 
 end program LBMSolver
 
