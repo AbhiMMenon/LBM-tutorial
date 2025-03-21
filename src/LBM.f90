@@ -1,10 +1,16 @@
-! Fortran implementation of Philip Mocz's Lattice Boltzam tutorial
+!----------------------------------------------------------------------------------------
+! Fortran implementation of Philip Mocz's Lattice Boltzam tutorial: flow around a
+! cylinder (in 2D) in a periodic domain, relective BCs are used for the cylinder itself
+!
 ! Notes:
 ! - DQ29 LBM scheme
-! - Equilibrium function for isothermal flow, i.e., constant speed of sound and specific gas constant
+! - Equilibrium function for isothermal flow, i.e., constant speed of sound and specific
+! gas constant
 ! - It replicates a dynamic viscosity as 
 !     mu = rho *( tau - 1/2)*Delta_T
-! - Delta_T (lattice time step) and Delta_x (lattice distance) are 1 (unity) for simplicity
+! - Delta_T (lattice time step) and Delta_x (lattice distance) are 1 (unity) for
+! simplicity
+!----------------------------------------------------------------------------------------
 program LBMSolver
     use, intrinsic :: iso_fortran_env, only:  dp=>real64
     use, intrinsic :: ieee_arithmetic, only: IEEE_Value, IEEE_QUIET_NAN
@@ -65,6 +71,8 @@ program LBMSolver
     
     call calcFlow(F,rho, ux,uy)
 
+
+    ! -- write out the initial fields
     where(mask)
         rho = IEEE_Value(rho, IEEE_QUIET_NAN)
         ux  = IEEE_Value(ux, IEEE_QUIET_NAN)
@@ -79,7 +87,11 @@ program LBMSolver
     do tx = 1,Nt
         print '("Iteration no.",i5)',tx
 
-        ! -- step 1: drift/adection in velocity phase-space
+        ! -- step 1: drift/adection in velocity phase-space. 
+
+        ! The use of cshift here as we have assumed lattice velocity and
+        ! lattice side lenghts as unity, i.e, there is a unit shift to each nodal point
+        ! per time step
         do kx = 1,9
             F(:,:,kx) = cshift(F(:,:,kx), shift=-cxs(kx), dim=1)
             F(:,:,kx) = cshift(F(:,:,kx), shift=-cys(kx), dim=2) 
@@ -131,14 +143,16 @@ program LBMSolver
     contains 
 
 
-        !----------------------------------------------------------!
-        ! Write matrix M to a file 'id.dat', ascii format for now  !
+        !------------------------------------------------------------------------------!
+        ! Write matrix M to a file 'prefix_id.dat', ascii format for now (perhaps switch
+        ! to a gnuplot binary array format later)
+        !
         ! M - array to write
         ! x - x meshgrid
         ! y - y meshgrid
         ! prefix - name of scalar
         ! id - time_step number
-        !----------------------------------------------------------!
+        !------------------------------------------------------------------------------!
         subroutine mat_write(M,X,Y,prefix,id)
             implicit none
             real(dp), intent(in)          :: M(:,:), X(:,:), Y(:,:)
@@ -161,7 +175,10 @@ program LBMSolver
             close(io)
         end subroutine mat_write
 
-
+        !------------------------------------------------------------------------------!
+        ! Compute density, ux and uy as weighted sums of particle numbers in  velocity !
+        ! phase space                                                                  !
+        !------------------------------------------------------------------------------!
         subroutine calcFlow(F, rho, ux, uy)
             implicit none
             real(dp), intent(in)          :: F(:,:,:)
