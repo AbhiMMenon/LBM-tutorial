@@ -24,7 +24,7 @@ program LBMSolver
     ! a reflective BC.
     
 
-    integer, parameter  ::  Nx = 400, Ny= 100, NL = 9, Nt= 2000
+    integer, parameter  ::  Nx = 400, Ny= 100, NL = 9, Nt= 1
     real(dp), parameter ::  rho_0 = 1.100_dp, tau = 0.62_dp, PI=4.D0*DATAN(1.D0)
     
     integer             ::  idxs(9), cxs(9), cys(9), refl(9)
@@ -71,18 +71,6 @@ program LBMSolver
     
     call calcFlow(F,rho, ux,uy)
 
-
-    ! -- write out the initial fields
-    where(mask)
-        rho = IEEE_Value(rho, IEEE_QUIET_NAN)
-        ux  = IEEE_Value(ux, IEEE_QUIET_NAN)
-        uy  = IEEE_Value(uy, IEEE_QUIET_NAN)
-    end where
-    
-    call mat_write(rho, x,y,'rho',0)
-    call mat_write(ux, x,y,'ux',0)
-    call mat_write(uy, x,y,'uy',0)
-    
 
     do tx = 1,Nt
         print '("Iteration no.",i5)',tx
@@ -134,9 +122,9 @@ program LBMSolver
         uy  = IEEE_Value(uy, IEEE_QUIET_NAN)
     end where
     
-    call mat_write(rho, x,y,'rho',1)
-    call mat_write(ux, x,y,'ux',1)
-    call mat_write(uy, x,y,'uy',1)
+    call mat_write(rho, 'rho',1)
+    call mat_write( ux,  'ux',1)
+    call mat_write( uy,  'uy',1)
     
 
 
@@ -144,21 +132,17 @@ program LBMSolver
 
 
         !------------------------------------------------------------------------------!
-        ! Write matrix M to a file 'prefix_id.dat', ascii format for now (perhaps switch
-        ! to a gnuplot binary array format later)
-        !
+        ! Write matrix M to a file 'prefix_id.dat', 
         ! M - array to write
-        ! x - x meshgrid
-        ! y - y meshgrid
         ! prefix - name of scalar
         ! id - time_step number
         !------------------------------------------------------------------------------!
-        subroutine mat_write(M,X,Y,prefix,id)
+        subroutine mat_write(M,prefix,id)
             implicit none
-            real(dp), intent(in)          :: M(:,:), X(:,:), Y(:,:)
+            real(dp), intent(in)          :: M(:,:)
             integer, intent(in)           :: id
             character(len=*), intent(in)  :: prefix
-            integer                       :: io, ix, jx
+            integer                       :: io
             character(len=25)             :: fName
             
             write (fName, '(I4)') id
@@ -166,12 +150,8 @@ program LBMSolver
             fName = 'data/'//prefix//'_'//trim(adjustl(fName))//'.dat'
             fName = trim(adjustl(fName))
 
-            open(newunit=io, file=fName,  action='write')
-            do ix = 1,size(M,dim=1)
-                do jx = 1,size(M,dim=2)
-                    write (io,*) X(ix,jx), Y(ix,jx),M(ix,jx)
-                end do
-            end do
+            open(newunit=io, file=fName,  action='write',form='unformatted',access='stream')
+                write(io) M
             close(io)
         end subroutine mat_write
 
