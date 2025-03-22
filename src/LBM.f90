@@ -24,8 +24,8 @@ program LBMSolver
     ! a reflective BC.
     
 
-    integer, parameter  ::  Nx = 400, Ny= 100, NL = 9, Nt= 1
-    real(dp), parameter ::  rho_0 = 1.100_dp, tau = 0.62_dp, PI=4.D0*DATAN(1.D0)
+    integer, parameter  ::  Nx = 800, Ny= 200, NL = 9, Nt= 10000, Nsave=20
+    real(dp), parameter ::  rho_0 = 4.400_dp, tau = 0.62_dp, PI=4.D0*DATAN(1.D0)
     
     integer             ::  idxs(9), cxs(9), cys(9), refl(9)
     integer             ::  ix,jx,kx,tx !iterators
@@ -72,6 +72,8 @@ program LBMSolver
     call calcFlow(F,rho, ux,uy)
 
 
+    ix = 0 ! file write index
+     
     do tx = 1,Nt
         print '("Iteration no.",i5)',tx
 
@@ -112,19 +114,24 @@ program LBMSolver
                 F(:, :,kx) = bound(:,:,kx)
             end where
         end do
+        
+
+        if (mod(tx,Nsave)==0) then 
+            ! -- Print end fields
+            where(mask)
+                rho = IEEE_Value(rho, IEEE_QUIET_NAN)
+                ux  = IEEE_Value(ux, IEEE_QUIET_NAN)
+                uy  = IEEE_Value(uy, IEEE_QUIET_NAN)
+            end where
+            
+            call mat_write(rho, 'rho', ix)
+            call mat_write( ux,  'ux', ix)
+            call mat_write( uy,  'uy', ix)
+            ix = ix + 1
+        end if
 
     end do
     
-    ! -- Print end fields
-    where(mask)
-        rho = IEEE_Value(rho, IEEE_QUIET_NAN)
-        ux  = IEEE_Value(ux, IEEE_QUIET_NAN)
-        uy  = IEEE_Value(uy, IEEE_QUIET_NAN)
-    end where
-    
-    call mat_write(rho, 'rho',1)
-    call mat_write( ux,  'ux',1)
-    call mat_write( uy,  'uy',1)
     
 
 
@@ -150,7 +157,7 @@ program LBMSolver
             fName = 'data/'//prefix//'_'//trim(adjustl(fName))//'.dat'
             fName = trim(adjustl(fName))
 
-            open(newunit=io, file=fName,  action='write',form='unformatted',access='stream')
+            open(newunit=io, file=fName,  action='write',form='unformatted',access='stream',status='replace')
                 write(io) M
             close(io)
         end subroutine mat_write
