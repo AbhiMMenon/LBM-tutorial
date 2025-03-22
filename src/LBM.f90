@@ -25,7 +25,7 @@ program LBMSolver
     
 
     integer, parameter  ::  Nx = 800, Ny= 200, NL = 9, Nt= 10000, Nsave=20
-    real(dp), parameter ::  rho_0 = 4.400_dp, tau = 0.62_dp, PI=4.D0*DATAN(1.D0)
+    real(dp), parameter ::  rho_0 = 400_dp, tau = 0.62_dp, PI=4.D0*DATAN(1.D0)
     
     integer             ::  idxs(9), cxs(9), cys(9), refl(9)
     integer             ::  ix,jx,kx,tx !iterators
@@ -124,10 +124,10 @@ program LBMSolver
                 uy  = IEEE_Value(uy, IEEE_QUIET_NAN)
             end where
             
-            call mat_write(rho, 'rho', ix)
+        !   call mat_write(rho, 'rho', ix)
             call mat_write( ux,  'ux', ix)
-            call mat_write( uy,  'uy', ix)
-            ix = ix + 1
+        !   call mat_write( uy,  'uy', ix)
+        !   ix = ix + 1
         end if
 
     end do
@@ -158,7 +158,7 @@ program LBMSolver
             fName = trim(adjustl(fName))
 
             open(newunit=io, file=fName,  action='write',form='unformatted',access='stream',status='replace')
-                write(io) M
+                write(io) real(M)
             close(io)
         end subroutine mat_write
 
