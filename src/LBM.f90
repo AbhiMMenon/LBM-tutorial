@@ -24,8 +24,8 @@ program LBMSolver
     ! a reflective BC.
     
 
-    integer, parameter  ::  Nx = 800, Ny= 200, NL = 9, Nt= 10000, Nsave=20
-    real(dp), parameter ::  rho_0 = 400_dp, tau = 0.62_dp, PI=4.D0*DATAN(1.D0)
+    integer, parameter  ::  Nx = 400, Ny= 100, NL = 9, Nt= 10000, Nsave=20
+    real(dp), parameter ::  rho_0 = 1000_dp, tau = 0.62_dp, PI=4.D0*DATAN(1.D0)
     
     integer             ::  idxs(9), cxs(9), cys(9), refl(9)
     integer             ::  ix,jx,kx,tx !iterators
@@ -53,18 +53,18 @@ program LBMSolver
     ! Initial conditions
     F = 1.0_dp
     call random_number(F_eq)
-    F = F + 0.01*F_eq
+    F = F + 0.1*F_eq
 
     x = spread([(ix, ix=0,Nx-1)], 2, Ny) 
     y = spread([(jx, jx=0,Ny-1)], 1, Nx) 
 
     ! Add an initial number distribution along nodal points 2, i.e., having lattice velocity
     ! (+1,0)
-    F(:,:, 2) = F(:,:,2) + 2*(1. + 0.05*cos(2*PI*x/Nx*4))
-    mask = ((x-Nx/4.)**2 + (y-Ny/2.)**2).lt.(Ny/4.)**2 !< logical mask for where the cylinder is 
+    F(:,:, 2) = F(:,:,2)+ 2*(1. + 0.5*cos(2*PI*x/Nx*4))
+    mask = ((x-Nx/4.)**2 + (y-Ny/2.)**2).lt.(Ny/10.)**2 !< logical mask for where the cylinder is 
 
     ! Normalize with density
-    rho = sum(F(:,:,:), dim=3)
+    rho = sum(F, dim=3)
     do kx = 1,NL
         F(:,:,kx) = F(:,:,kx)*rho_0/rho
     end do
@@ -90,7 +90,7 @@ program LBMSolver
         call calcFlow(F,rho, ux,uy)
 
 
-        ! -- compute equilibrium number densities
+        ! -- compute equilibrium fuction, includes cs=1/sqrt(3)
         F_eq = 0._dp
         do kx = 1,9
             vDotU = ux*cxs(kx) + uy*cys(kx)
@@ -98,22 +98,27 @@ program LBMSolver
         end do
 
 
-        ! -- Store reflective BC
+        ! -- Store reflections
         do kx = 1,Nl
             where(mask)
                 bound(:,:,kx) = F(:, :,refl(kx))
             end where
         end do
+
+        ! -- Collision step, relax to equilibrium. The tau here represents a viscosity
+        ! --  related to c_s (speed of sound) as nu = c_s^2*(tau-0.5)
+
+        F = F+ (F_eq -F)/tau 
         
-        ! -- Collision step, relax to equilibrium
-        F = F+ (F_eq -F)/tau
-        
-        ! -- enforce reflective BC
+        ! -- apply reflections on circle surface
         do kx = 1,Nl
             where(mask)
                 F(:, :,kx) = bound(:,:,kx)
             end where
         end do
+
+        ! -- testing: apply fixed bc at inlet
+   !    F(:,:, 2) = F(:,:,2)+ 2*(1. + 0.5*cos(2*PI*x/Nx*4))
         
 
         if (mod(tx,Nsave)==0) then 
@@ -123,6 +128,7 @@ program LBMSolver
                 ux  = IEEE_Value(ux, IEEE_QUIET_NAN)
                 uy  = IEEE_Value(uy, IEEE_QUIET_NAN)
             end where
+
             
         !   call mat_write(rho, 'rho', ix)
             call mat_write( ux,  'ux', ix)
