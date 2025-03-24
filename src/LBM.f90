@@ -16,10 +16,11 @@ program LBMSolver
     implicit none
 
 
-    ! NL is the no. of DOFs in velocity phase-space (9), F is the density function, tau
-    ! is the relaxating time. The arrays idxs, cxs, cys and refl are, respectively:
-    ! numbering indices for each node in a voxel, x-velocity for each node, y-velocity
-    ! for each node, and a 'reverse' numbering that implements a reflective BC.
+    ! NL is the no. of DOFs in velocity phase-space (9), F is the (discrete) density
+    ! function in velocity phase-space, tau is the relaxating time. The arrays idxs,
+    ! cxs, cys and refl are, respectively: numbering indices for each node in a voxel,
+    ! x-velocity for each node, y-velocity for each node, and a 'reverse' numbering that
+    ! implements a reflective BC.
     
 
     integer, parameter  ::  Nx = 800, Ny= 200, NL = 9, Nt= 20000, Nsave=20
@@ -35,7 +36,7 @@ program LBMSolver
     logical             ::  mask(Nx,Ny)
 
     nanVal = IEEE_Value(nanVal, IEEE_QUIET_NAN)
-    ! The numbering system here for D2Q9 here is as follows, it differs from Peter's
+    ! The numbering system here for D2Q9 here is as follows, it differs from Philip's
     ! python version
     !                            7   3   6
     !                              \ | /       
@@ -54,8 +55,9 @@ program LBMSolver
     ! Initial conditions
     F = 1.0_dp
     call random_number(F_eq)
-    F = F + 0.1*F_eq
+    F = F + 0.1*F_eq !< Some initial perturbations
 
+    ! meshgrid
     x = spread([(kx, kx=0,Nx-1)], 2, Ny) 
     y = spread([(kx, kx=0,Ny-1)], 1, Nx) 
 
@@ -70,6 +72,8 @@ program LBMSolver
         F(:,:,kx) = F(:,:,kx)*rho_0/rho
     end do
     
+
+    ! Compute rho, ux, uy and omega from F
     call calcFlow(F,rho, ux,uy)
 
 
@@ -128,8 +132,10 @@ program LBMSolver
             end where
         end do
 
-        ! -- Collision step, relax to equilibrium. The tau here represents a viscosity that is 
-        ! -- related to c_s (speed of sound) as nu = c_s^2*(tau-0.5)
+        ! -- Collision step, relax to equilibrium, i.e., Bhatnagar-Gross-Krook (BGK)
+        ! -- approach. The tau here models kinematic viscosity that is related to c_s (speed
+        ! -- of sound) as 
+        !                       nu = c_s^2*(tau-0.5)
 
         F = F+ (F_eq -F)/tau 
         
@@ -193,8 +199,8 @@ program LBMSolver
         end subroutine mat_write
 
         !------------------------------------------------------------------------------!
-        ! Compute density, ux and uy as weighted sums of particle numbers in  velocity !
-        ! phase space                                                                  !
+        ! Compute rho, ux, ux as weighted sum of discrete density function. Omega
+        ! (vorticity) using usual gradients assuming unit grid size.
         !------------------------------------------------------------------------------!
         subroutine calcFlow(F, rho, ux, uy)
             implicit none
