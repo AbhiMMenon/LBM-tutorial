@@ -16,12 +16,12 @@ more stable)
   
     mkdir data obj
     make
-    ./LBMSolver
+    ./LBMsolver
 
 Writes ~600Mb raw binary data to `data`. Visualize vorticity with 
 
     make movie
-
+which produces `movie.mp4`. 
 ![](output.gif)
 
 
